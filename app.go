@@ -1,92 +1,143 @@
 package main
 
+import "bufio"
 import "fmt"
-import "os"
+import "io"
+import "io/ioutil"
 import "net/http"
+import "os"
+import "strconv"
+import "strings"
 import "time"
 
-const STATUS_CODE_OK = 200
-const MENU_INICIAR_MONITORAMENT = 1
-const MENU_EXIBIR_LOGS = 2
-const MENU_SAIR_DO_PROGRAMA = 0
-const RODADA_MONITORAMENTOS = 3
-const TIME_DELAY_MONITORAMENTOS = 5
+const CICLO_MONITORAMENTOS = 2
+const TIME_SLEEP_DELAY = 5
 
 func main() {
-	exibirIntroducao()
-	
+	exibeIntroducao()
+
 	for {
-		exibirMenu()
-		executarComandoDigitado(lerComandoDigitado())
+		exibeMenu()
+
+		comando := leComando()
+
+		switch comando {
+		case 1:
+			iniciarMonitoramento()
+		case 2:
+			fmt.Println("Exibindo Logs...")
+			imprimeLogs()
+		case 0:
+			fmt.Println("Saindo do programa")
+			os.Exit(0)
+		default:
+			fmt.Println("Não conheço este comando")
+			os.Exit(-1)
+		}
 	}
+
 }
 
-func exibirIntroducao() {
-	nome := "Malaquias"
-	versao := 0.1
-
-	fmt.Println("Olá Sr.", nome)
-	fmt.Println("Este programa está na versão: ", versao)
-	
+func exibeIntroducao() {
+	nome := "Douglas"
+	versao := 1.2
+	fmt.Println("Olá, sr.", nome)
+	fmt.Println("Este programa está na versão", versao)
 }
 
-func exibirMenu() {
+func exibeMenu() {
 	fmt.Println("1- Iniciar Monitoramento")
 	fmt.Println("2- Exibir Logs")
 	fmt.Println("0- Sair do Programa")
 }
 
-func lerComandoDigitado() int {
-	var comando int
-	
-	fmt.Scan(&comando)
-	fmt.Println("O comando digitado foi: ", comando)
+func leComando() int {
+	var comandoLido int
+	fmt.Scan(&comandoLido)
+	fmt.Println("O comando escolhido foi", comandoLido)
+	fmt.Println("")
 
-	return comando
-}
-
-func executarComandoDigitado(comando int) {
-switch comando {
-	case MENU_INICIAR_MONITORAMENT:
-		iniciarMonitoramento()
-	case MENU_EXIBIR_LOGS:
-		fmt.Println("Exibindo logs...")
-	case MENU_SAIR_DO_PROGRAMA:
-		fmt.Println("Saindo do programa...")
-		os.Exit(0)
-	default:
-		fmt.Println("Não conheço este comando")
-		os.Exit(-1)
-	}
+	return comandoLido
 }
 
 func iniciarMonitoramento() {
 	fmt.Println("Monitorando...")
-	sites := []string{"http://random-status-code.herokuapp.com/"}
+	sites := leSitesDoArquivo()
 
-    for i := 0; i < RODADA_MONITORAMENTOS; i++ {
+	for i := 0; i < CICLO_MONITORAMENTOS; i++ {
 		for i, site := range sites {
-	        fmt.Println("Testando site", i, ":", site)
-	        testaSite(site)
+			fmt.Println("Testando site", i, ":", site)
+			testaSite(site)
 		}
-		
-		time.Sleep(TIME_DELAY_MONITORAMENTOS * time.Second)
-		imprimirLinhaEmBranco()
-    }
+		time.Sleep(TIME_SLEEP_DELAY * time.Second)
+		fmt.Println("")
+	}
 
-	imprimirLinhaEmBranco()
+	fmt.Println("")
 }
 
 func testaSite(site string) {
-	res, _ := http.Get(site)
-	
-	if res.StatusCode == STATUS_CODE_OK {
-		fmt.Println("Site: ", site, "foi carregado com sucesso!")
+	resp, err := http.Get(site)
+
+	if err != nil {
+		fmt.Println("Ocorreu um erro:", err)
+	}
+
+	if resp.StatusCode == 200 {
+		fmt.Println("Site:", site, "foi carregado com sucesso!")
+		registraLog(site, true)
 	} else {
-		fmt.Println("Site: ", site, "está com problemas. Status Code: ", res.StatusCode)
+		fmt.Println("Site:", site, "esta com problemas. Status Code:", resp.StatusCode)
+		registraLog(site, false)
 	}
 }
 
-func imprimirLinhaEmBranco() {
-	fmt.Println("")
+func leSitesDoArquivo() []string {
+	var sites []string
+	arquivo, err := os.Open("sites.txt")
+
+	if err != nil {
+		fmt.Println("Ocorreu um erro:", err)
+	}
+
+	leitor := bufio.NewReader(arquivo)
+	for {
+		linha, err := leitor.ReadString('\n')
+		linha = strings.TrimSpace(linha)
+
+		sites = append(sites, linha)
+
+		if err == io.EOF {
+			break
+		}
+
+	}
+
+	arquivo.Close()
+	return sites
+}
+
+func registraLog(site string, status bool) {
+
+	arquivo, err := os.OpenFile("log.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	arquivo.WriteString(time.Now().Format("02/01/2006 15:04:05") + " - " + site + " - online: " + strconv.FormatBool(status) + "\n")
+
+	arquivo.Close()
+}
+
+func imprimeLogs() {
+
+	arquivo, err := ioutil.ReadFile("log.txt")
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	fmt.Println(string(arquivo))
+
 }
